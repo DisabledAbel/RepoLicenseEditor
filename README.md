@@ -45,16 +45,19 @@ The browser-based version requires no installation and runs directly in your web
 
 ### Installation
 
-Clone the repository and install the dependencies:
+Follow these steps to set up the project locally:
 
+1. **Clone the repository**:
 ```bash
 git clone https://github.com/DisabledAbel/RepoLicenseEditor.git
 ```
 
+2. **Navigate to the project directory**:
 ```bash
 cd RepoLicenseEditor
 ```
 
+3. **Install the required dependencies**:
 ```bash
 npm install
 ```
