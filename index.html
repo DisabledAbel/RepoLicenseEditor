@@ -102,11 +102,16 @@
 
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Change License Template (optional)</label>
-                <select id="licenseSelect" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 dark:bg-gray-700 dark:text-white">
-                    <option value="">Keep current license</option>
-                    <option value="custom">Custom Template...</option>
-                    <!-- Licenses will be injected here -->
-                </select>
+                <div class="flex space-x-2">
+                    <select id="licenseSelect" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 dark:bg-gray-700 dark:text-white">
+                        <option value="">Keep current license</option>
+                        <option value="custom">Custom Template...</option>
+                        <!-- Licenses will be injected here -->
+                    </select>
+                    <button type="button" id="compareTemplatesBtn" class="mt-1 bg-indigo-600 text-white font-bold py-2 px-4 rounded hover:bg-indigo-700 transition duration-200 whitespace-nowrap">
+                        Compare
+                    </button>
+                </div>
             </div>
 
             <div id="customLicenseContainer" class="hidden">
@@ -131,8 +136,38 @@
         </div>
     </div>
 
+    <!-- Comparison Modal -->
+    <div id="compareModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col border dark:border-gray-700">
+            <div class="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-gray-800 dark:text-white">Compare Licenses</h3>
+                <button id="closeCompareModal" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-2xl">&times;</button>
+            </div>
+
+            <div class="p-4 grid grid-cols-2 gap-4 flex-grow overflow-hidden">
+                <div class="flex flex-col space-y-2 h-full">
+                    <select id="compareLeftSelect" class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 dark:bg-gray-700 dark:text-white">
+                        <option value="">Select License A...</option>
+                    </select>
+                    <div id="compareLeftContent" class="flex-grow overflow-auto p-4 bg-gray-50 dark:bg-gray-900 rounded border dark:border-gray-700 font-mono text-sm whitespace-pre-wrap dark:text-gray-300"></div>
+                </div>
+                <div class="flex flex-col space-y-2 h-full">
+                    <select id="compareRightSelect" class="w-full border border-gray-300 dark:border-gray-600 rounded p-2 dark:bg-gray-700 dark:text-white">
+                        <option value="">Select License B...</option>
+                    </select>
+                    <div id="compareRightContent" class="flex-grow overflow-auto p-4 bg-gray-50 dark:bg-gray-900 rounded border dark:border-gray-700 font-mono text-sm whitespace-pre-wrap dark:text-gray-300"></div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t dark:border-gray-700 flex justify-end">
+                <button id="closeCompareBtn" class="bg-gray-600 text-white font-bold py-2 px-6 rounded hover:bg-gray-700 transition duration-200">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { Octokit } from "https://esm.sh/@octokit/rest";
+        import * as jsdiff from "https://esm.sh/diff";
         import { replaceLogic, checkLicenseIntegrity } from "./logic.js";
 
         const form = document.getElementById('editorForm');
@@ -150,9 +185,18 @@
         const sortBy = document.getElementById('sortBy');
         const filterLicense = document.getElementById('filterLicense');
         const filterBranch = document.getElementById('filterBranch');
+        const compareModal = document.getElementById('compareModal');
+        const closeCompareModal = document.getElementById('closeCompareModal');
+        const closeCompareBtn = document.getElementById('closeCompareBtn');
+        const compareLeftSelect = document.getElementById('compareLeftSelect');
+        const compareRightSelect = document.getElementById('compareRightSelect');
+        const compareLeftContent = document.getElementById('compareLeftContent');
+        const compareRightContent = document.getElementById('compareRightContent');
+        const compareTemplatesBtn = document.getElementById('compareTemplatesBtn');
 
         let allFetchedRepos = [];
         let selectedRepoIds = new Set();
+        let cachedTemplates = {};
 
         function clearRepoState() {
             allFetchedRepos = [];
@@ -178,6 +222,7 @@
                     option.textContent = license.name;
                     licenseSelect.appendChild(option);
                 });
+                populateCompareSelects(data);
             } catch (error) {
                 console.error('Error fetching licenses:', error);
             }
@@ -242,6 +287,31 @@
                 fetchReposBtn.textContent = 'Fetch';
             }
         });
+
+        function populateCompareSelects(licenses) {
+            const selects = [compareLeftSelect, compareRightSelect];
+            selects.forEach(select => {
+                select.innerHTML = '<option value="">Select License...</option>';
+                const customOpt = document.createElement('option');
+                customOpt.value = 'custom';
+                customOpt.textContent = 'Custom Template';
+                select.appendChild(customOpt);
+
+                licenses.forEach(l => {
+                    const opt = document.createElement('option');
+                    opt.value = `template:${l.key}`;
+                    opt.textContent = `Template: ${l.name}`;
+                    select.appendChild(opt);
+                });
+
+                allFetchedRepos.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = `repo:${r.id}`;
+                    opt.textContent = `Repo: ${r.name}`;
+                    select.appendChild(opt);
+                });
+            });
+        }
 
         function populateFilters() {
             const licenses = new Set();
@@ -359,9 +429,24 @@
                 branch.className = 'bg-gray-200 dark:bg-gray-700 px-1 rounded';
                 branch.textContent = repo.default_branch;
 
+                const compareBtn = document.createElement('button');
+                compareBtn.type = 'button';
+                compareBtn.className = 'text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 ml-2 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition duration-150';
+                compareBtn.title = 'Compare with selected template';
+                compareBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                `;
+                compareBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openCompareWithRepo(repo);
+                });
+
                 rightSide.appendChild(stars);
                 rightSide.appendChild(license);
                 rightSide.appendChild(branch);
+                rightSide.appendChild(compareBtn);
 
                 div.appendChild(leftSide);
                 div.appendChild(rightSide);
@@ -374,6 +459,26 @@
         filterLicense.addEventListener('change', renderRepoList);
         filterBranch.addEventListener('change', renderRepoList);
 
+        async function getRepoLicenseContent(repo) {
+            const token = document.getElementById('token').value;
+            if (!token) return "";
+            const octokit = new Octokit({ auth: token });
+            const possibleFiles = ["LICENSE", "LICENSE.md", "LICENSE.txt", "license", "license.md", "license.txt"];
+            for (const file of possibleFiles) {
+                try {
+                    const resp = await octokit.rest.repos.getContent({
+                        owner: repo.owner.login,
+                        repo: repo.name,
+                        path: file
+                    });
+                    if (resp.data && !Array.isArray(resp.data)) {
+                        return decodeURIComponent(escape(atob(resp.data.content.replace(/\s/g, ''))));
+                    }
+                } catch (e) {}
+            }
+            return "";
+        }
+
         async function fetchIntegrity(repo) {
             const token = document.getElementById('token').value;
             const badge = document.getElementById(`integrity-${repo.id}`);
@@ -381,21 +486,7 @@
 
             const octokit = new Octokit({ auth: token });
             try {
-                const possibleFiles = ["LICENSE", "LICENSE.md", "LICENSE.txt", "license", "license.md", "license.txt"];
-                let content = "";
-                for (const file of possibleFiles) {
-                    try {
-                        const resp = await octokit.rest.repos.getContent({
-                            owner: repo.owner.login,
-                            repo: repo.name,
-                            path: file
-                        });
-                        if (resp.data && !Array.isArray(resp.data)) {
-                            content = decodeURIComponent(escape(atob(resp.data.content.replace(/\s/g, ''))));
-                            break;
-                        }
-                    } catch (e) {}
-                }
+                const content = await getRepoLicenseContent(repo);
 
                 if (!content) {
                     badge.textContent = 'NO FILE';
@@ -440,6 +531,103 @@
                 customLicenseContainer.classList.add('hidden');
             }
         });
+
+        // Comparison Modal Logic
+        function closeCompare() {
+            compareModal.classList.add('hidden');
+        }
+        closeCompareModal.addEventListener('click', closeCompare);
+        closeCompareBtn.addEventListener('click', closeCompare);
+
+        async function getLicenseContent(val) {
+            if (!val) return "";
+            const token = document.getElementById('token').value;
+            if (val === 'custom') return customLicense.value;
+            if (val.startsWith('template:')) {
+                const key = val.split(':')[1];
+                if (cachedTemplates[key]) return cachedTemplates[key];
+                if (!token) return "Token required to fetch template body.";
+                const octokit = new Octokit({ auth: token });
+                const { data } = await octokit.rest.licenses.get({ license: key });
+                cachedTemplates[key] = data.body;
+                return data.body;
+            }
+            if (val.startsWith('repo:')) {
+                const id = parseInt(val.split(':')[1]);
+                const repo = allFetchedRepos.find(r => r.id === id);
+                if (!repo) return "Repo not found.";
+                return await getRepoLicenseContent(repo);
+            }
+            return "";
+        }
+
+        async function renderDiff() {
+            const leftVal = compareLeftSelect.value;
+            const rightVal = compareRightSelect.value;
+
+            compareLeftContent.textContent = 'Loading...';
+            compareRightContent.textContent = 'Loading...';
+
+            const leftContent = await getLicenseContent(leftVal);
+            const rightContent = await getLicenseContent(rightVal);
+
+            compareLeftContent.innerHTML = '';
+            compareRightContent.innerHTML = '';
+
+            const diff = jsdiff.diffLines(leftContent, rightContent);
+
+            diff.forEach((part) => {
+                const colorClass = part.added ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' :
+                                  part.removed ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200' : '';
+
+                const div = document.createElement('div');
+                if (colorClass) div.className = colorClass;
+                div.textContent = part.value;
+
+                if (part.added) {
+                    // Added to right, so we need a placeholder in left
+                    const lines = part.value.split('\n').length - 1;
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'bg-gray-100 dark:bg-gray-800 opacity-50';
+                    placeholder.textContent = '\n'.repeat(lines);
+                    compareLeftContent.appendChild(placeholder);
+                    compareRightContent.appendChild(div);
+                } else if (part.removed) {
+                    // Removed from left, so we need a placeholder in right
+                    const lines = part.value.split('\n').length - 1;
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'bg-gray-100 dark:bg-gray-800 opacity-50';
+                    placeholder.textContent = '\n'.repeat(lines);
+                    compareLeftContent.appendChild(div);
+                    compareRightContent.appendChild(placeholder);
+                } else {
+                    compareLeftContent.appendChild(div.cloneNode(true));
+                    compareRightContent.appendChild(div);
+                }
+            });
+        }
+
+        compareLeftSelect.addEventListener('change', renderDiff);
+        compareRightSelect.addEventListener('change', renderDiff);
+
+        compareTemplatesBtn.addEventListener('click', () => {
+            const selected = licenseSelect.value;
+            if (selected) {
+                compareLeftSelect.value = selected === 'custom' ? 'custom' : `template:${selected}`;
+            }
+            compareModal.classList.remove('hidden');
+            renderDiff();
+        });
+
+        window.openCompareWithRepo = async (repo) => {
+            compareLeftSelect.value = `repo:${repo.id}`;
+            const selected = licenseSelect.value;
+            if (selected) {
+                compareRightSelect.value = selected === 'custom' ? 'custom' : `template:${selected}`;
+            }
+            compareModal.classList.remove('hidden');
+            renderDiff();
+        };
 
         selectAll.addEventListener('change', () => {
             const filter = repoSearch.value.toLowerCase();
