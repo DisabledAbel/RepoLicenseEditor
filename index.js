@@ -19,6 +19,7 @@ program
   .option("--new-year <year>", "The new year")
   .option("--old-name <name>", "The name to be replaced")
   .option("--new-name <name>", "The new name")
+  .option("-r, --repos <repos>", "Comma-separated list of repository names to process")
   .option("--dry-run", "Show what would be changed without making actual changes")
   .parse(process.argv);
 
@@ -131,8 +132,14 @@ async function updateLicense(repo) {
 
 async function main() {
   console.log(chalk.cyan("Fetching repositories..."));
-  const repos = await getRepositories();
+  let repos = await getRepositories();
   console.log(chalk.cyan(`Found ${repos.length} repositories.`));
+
+  if (options.repos) {
+    const targetRepos = options.repos.split(",").map(r => r.trim());
+    repos = repos.filter(repo => targetRepos.includes(repo.name));
+    console.log(chalk.cyan(`Filtered to ${repos.length} repositories based on --repos flag.`));
+  }
 
   for (const repo of repos) {
     await updateLicense(repo);
