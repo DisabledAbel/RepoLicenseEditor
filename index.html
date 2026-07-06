@@ -280,6 +280,10 @@
                 populateFilters();
                 renderRepoList();
                 repoSelection.classList.remove('hidden');
+
+                // Refresh comparison selects with new repos
+                const { data: licenses } = await octokit.rest.licenses.getAllCommonlyUsed();
+                populateCompareSelects(licenses);
             } catch (error) {
                 log(`Error fetching repositories: ${error.message}`, 'error');
             } finally {
@@ -474,7 +478,9 @@
                     if (resp.data && !Array.isArray(resp.data)) {
                         return decodeURIComponent(escape(atob(resp.data.content.replace(/\s/g, ''))));
                     }
-                } catch (e) {}
+                } catch (e) {
+                    if (e.status !== 404) throw e;
+                }
             }
             return "";
         }
@@ -562,49 +568,54 @@
         }
 
         async function renderDiff() {
-            const leftVal = compareLeftSelect.value;
-            const rightVal = compareRightSelect.value;
+            try {
+                const leftVal = compareLeftSelect.value;
+                const rightVal = compareRightSelect.value;
 
-            compareLeftContent.textContent = 'Loading...';
-            compareRightContent.textContent = 'Loading...';
+                compareLeftContent.textContent = 'Loading...';
+                compareRightContent.textContent = 'Loading...';
 
-            const leftContent = await getLicenseContent(leftVal);
-            const rightContent = await getLicenseContent(rightVal);
+                const leftContent = await getLicenseContent(leftVal);
+                const rightContent = await getLicenseContent(rightVal);
 
-            compareLeftContent.innerHTML = '';
-            compareRightContent.innerHTML = '';
+                compareLeftContent.innerHTML = '';
+                compareRightContent.innerHTML = '';
 
-            const diff = jsdiff.diffLines(leftContent, rightContent);
+                const diff = jsdiff.diffLines(leftContent, rightContent);
 
-            diff.forEach((part) => {
-                const colorClass = part.added ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' :
-                                  part.removed ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200' : '';
+                diff.forEach((part) => {
+                    const colorClass = part.added ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' :
+                                    part.removed ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200' : '';
 
-                const div = document.createElement('div');
-                if (colorClass) div.className = colorClass;
-                div.textContent = part.value;
+                    const div = document.createElement('div');
+                    if (colorClass) div.className = colorClass;
+                    div.textContent = part.value;
 
-                if (part.added) {
-                    // Added to right, so we need a placeholder in left
-                    const lines = part.value.split('\n').length - 1;
-                    const placeholder = document.createElement('div');
-                    placeholder.className = 'bg-gray-100 dark:bg-gray-800 opacity-50';
-                    placeholder.textContent = '\n'.repeat(lines);
-                    compareLeftContent.appendChild(placeholder);
-                    compareRightContent.appendChild(div);
-                } else if (part.removed) {
-                    // Removed from left, so we need a placeholder in right
-                    const lines = part.value.split('\n').length - 1;
-                    const placeholder = document.createElement('div');
-                    placeholder.className = 'bg-gray-100 dark:bg-gray-800 opacity-50';
-                    placeholder.textContent = '\n'.repeat(lines);
-                    compareLeftContent.appendChild(div);
-                    compareRightContent.appendChild(placeholder);
-                } else {
-                    compareLeftContent.appendChild(div.cloneNode(true));
-                    compareRightContent.appendChild(div);
-                }
-            });
+                    if (part.added) {
+                        // Added to right, so we need a placeholder in left
+                        const lines = part.value.split('\n').length - 1;
+                        const placeholder = document.createElement('div');
+                        placeholder.className = 'bg-gray-100 dark:bg-gray-800 opacity-50';
+                        placeholder.textContent = '\n'.repeat(lines);
+                        compareLeftContent.appendChild(placeholder);
+                        compareRightContent.appendChild(div);
+                    } else if (part.removed) {
+                        // Removed from left, so we need a placeholder in right
+                        const lines = part.value.split('\n').length - 1;
+                        const placeholder = document.createElement('div');
+                        placeholder.className = 'bg-gray-100 dark:bg-gray-800 opacity-50';
+                        placeholder.textContent = '\n'.repeat(lines);
+                        compareLeftContent.appendChild(div);
+                        compareRightContent.appendChild(placeholder);
+                    } else {
+                        compareLeftContent.appendChild(div.cloneNode(true));
+                        compareRightContent.appendChild(div);
+                    }
+                });
+            } catch (error) {
+                compareLeftContent.textContent = 'Error: ' + error.message;
+                compareRightContent.textContent = 'Error: ' + error.message;
+            }
         }
 
         compareLeftSelect.addEventListener('change', renderDiff);

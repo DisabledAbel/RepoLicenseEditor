@@ -94,7 +94,7 @@ async function getRepoLicenseContent(repo) {
 async function updateLicense(repo, licenseTemplateBody = null) {
   const { owner, name: repoName } = repo;
   const licenseData = await getRepoLicenseContent(repo);
-  const licenseFile = licenseData ? licenseData.path : null;
+  let licenseFile = licenseData ? licenseData.path : null;
   const content = licenseData ? licenseData.content : null;
   const sha = licenseData ? licenseData.sha : null;
 
@@ -223,7 +223,11 @@ async function main() {
   }
 
   for (const repo of repos) {
-    await updateLicense(repo, licenseTemplateBody);
+    try {
+      await updateLicense(repo, licenseTemplateBody);
+    } catch (error) {
+      console.error(chalk.red(`Error processing repository ${repo.name}: ${error.message}`));
+    }
   }
 
   console.log(chalk.bold.green("\nDone!"));
