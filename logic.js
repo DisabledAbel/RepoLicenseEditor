@@ -38,14 +38,10 @@ export function replaceLogic(content, options) {
     }
     newContent = options.licenseTemplateBody;
 
-    let yearReplaced = false;
-    let nameReplaced = false;
-
     if (options.newYear) {
       YEAR_PLACEHOLDERS.forEach(p => {
         if (newContent.includes(p)) {
           newContent = newContent.split(p).join(options.newYear);
-          yearReplaced = true;
         }
       });
     }
@@ -54,7 +50,6 @@ export function replaceLogic(content, options) {
       NAME_PLACEHOLDERS.forEach(p => {
         if (newContent.includes(p)) {
           newContent = newContent.split(p).join(options.newName);
-          nameReplaced = true;
         }
       });
     }
