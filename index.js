@@ -5,6 +5,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import dotenv from "dotenv";
 import fs from "fs";
+import * as jsdiff from "diff";
 import { replaceLogic, checkLicenseIntegrity } from "./logic.js";
 
 dotenv.config();
@@ -28,6 +29,7 @@ program
   .option("--branch <name>", "Filter repositories by default branch name")
   .option("--current-license <spdx_id>", "Filter repositories by their current license spdx_id")
   .option("--verify", "Verify license integrity without making changes")
+  .option("--compare-with <license>", "Compare current license of repos with a given template")
   .parse(process.argv);
 
 const options = program.opts();
@@ -61,13 +63,9 @@ async function getRepositories() {
   return repos;
 }
 
-async function updateLicense(repo, licenseTemplateBody = null) {
+async function getRepoLicenseContent(repo) {
   const { owner, name: repoName } = repo;
   const possibleLicenseFiles = ["LICENSE", "LICENSE.md", "LICENSE.txt", "license", "license.md", "license.txt"];
-
-  let licenseFile = null;
-  let content = null;
-  let sha = null;
 
   for (const file of possibleLicenseFiles) {
     try {
@@ -78,16 +76,41 @@ async function updateLicense(repo, licenseTemplateBody = null) {
       });
 
       if (response.data && !Array.isArray(response.data)) {
-        licenseFile = file;
-        content = Buffer.from(response.data.content, 'base64').toString('utf-8');
-        sha = response.data.sha;
-        break;
+        return {
+          content: Buffer.from(response.data.content, 'base64').toString('utf-8'),
+          path: file,
+          sha: response.data.sha
+        };
       }
     } catch (error) {
       if (error.status !== 404) {
         throw error;
       }
     }
+  }
+  return null;
+}
+
+async function updateLicense(repo, licenseTemplateBody = null) {
+  const { owner, name: repoName } = repo;
+  const licenseData = await getRepoLicenseContent(repo);
+  const licenseFile = licenseData ? licenseData.path : null;
+  const content = licenseData ? licenseData.content : null;
+  const sha = licenseData ? licenseData.sha : null;
+
+  if (options.compareWith && licenseTemplateBody) {
+    if (!content) {
+      console.log(chalk.yellow(`${owner.login}/${repoName}: No license file found to compare.`));
+    } else {
+      console.log(chalk.cyan(`\nComparing ${owner.login}/${repoName} with ${options.compareWith}:`));
+      const diff = jsdiff.diffLines(content, licenseTemplateBody);
+      diff.forEach((part) => {
+        const color = part.added ? chalk.green : part.removed ? chalk.red : chalk.gray;
+        process.stdout.write(color(part.value));
+      });
+      console.log("\n" + chalk.cyan("-".repeat(40)));
+    }
+    return;
   }
 
   if (options.verify) {
@@ -180,7 +203,8 @@ async function main() {
   }
 
   let licenseTemplateBody = null;
-  if (options.license || options.customLicense) {
+  let compareLicense = options.compareWith || options.license;
+  if (compareLicense || options.customLicense) {
       try {
           if (options.customLicense) {
               if (!fs.existsSync(options.customLicense)) {
@@ -189,7 +213,7 @@ async function main() {
               }
               licenseTemplateBody = fs.readFileSync(options.customLicense, "utf-8");
           } else {
-              const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: options.license });
+              const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: compareLicense });
               licenseTemplateBody = licenseTemplate.body;
           }
       } catch (error) {
