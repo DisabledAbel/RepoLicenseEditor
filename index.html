@@ -230,6 +230,8 @@
             try {
                 const { data } = await octokit.rest.licenses.getAllCommonlyUsed();
 
+                populateLicenseSelect();
+
                 // Merge with bundled if any new ones found
                 data.forEach(license => {
                     if (!TEMPLATES[license.key]) {
