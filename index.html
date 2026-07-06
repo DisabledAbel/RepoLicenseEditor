@@ -12,47 +12,66 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-8">
-    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6">
-        <h1 class="text-2xl font-bold mb-6 text-gray-800">GitHub License Bulk Editor</h1>
+<body class="bg-gray-100 dark:bg-gray-900 min-h-screen p-8 transition-colors duration-200">
+    <div class="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border dark:border-gray-700 transition-colors duration-200">
+        <h1 class="text-2xl font-bold mb-6 text-gray-800 dark:text-white">GitHub License Bulk Editor</h1>
 
         <form id="editorForm" class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">GitHub Personal Access Token</label>
-                    <input type="password" id="token" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="ghp_xxxxxxxxxxxx">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">GitHub Personal Access Token</label>
+                    <input type="password" id="token" required class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 dark:bg-gray-700 dark:text-white" placeholder="ghp_xxxxxxxxxxxx">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Organization (optional)</label>
-                    <input type="text" id="org" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="e.g. google">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Organization (optional)</label>
+                    <div class="flex space-x-2">
+                        <input type="text" id="org" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 dark:bg-gray-700 dark:text-white" placeholder="e.g. google">
+                        <button type="button" id="fetchReposBtn" class="mt-1 bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700 transition duration-200">Fetch</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="repoSelection" class="hidden space-y-2 border dark:border-gray-700 p-4 rounded-md">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <h3 class="text-md font-semibold text-gray-800 dark:text-white">Select Repositories</h3>
+                    <div class="flex items-center space-x-4">
+                        <input type="text" id="repoSearch" class="border border-gray-300 dark:border-gray-600 rounded-md p-1 text-sm dark:bg-gray-700 dark:text-white" placeholder="Filter repos...">
+                        <div class="flex items-center space-x-1">
+                            <input type="checkbox" id="selectAll" class="h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700">
+                            <label for="selectAll" class="text-sm text-gray-700 dark:text-gray-300">Select All</label>
+                        </div>
+                    </div>
+                </div>
+                <div id="repoList" class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border dark:border-gray-700 rounded bg-gray-50 dark:bg-gray-900">
+                    <!-- Repositories will be injected here -->
                 </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Old Year</label>
-                    <input type="text" id="oldYear" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="2023">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Old Year</label>
+                    <input type="text" id="oldYear" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 dark:bg-gray-700 dark:text-white" placeholder="2023">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">New Year</label>
-                    <input type="text" id="newYear" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="2024">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">New Year</label>
+                    <input type="text" id="newYear" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 dark:bg-gray-700 dark:text-white" placeholder="2024">
                 </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Old Name</label>
-                    <input type="text" id="oldName" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="John Doe">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Old Name</label>
+                    <input type="text" id="oldName" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 dark:bg-gray-700 dark:text-white" placeholder="John Doe">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">New Name</label>
-                    <input type="text" id="newName" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2" placeholder="Jane Smith">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">New Name</label>
+                    <input type="text" id="newName" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 dark:bg-gray-700 dark:text-white" placeholder="Jane Smith">
                 </div>
             </div>
 
             <div class="flex items-center space-x-2">
-                <input type="checkbox" id="dryRun" checked class="h-4 w-4 text-blue-600 border-gray-300 rounded">
-                <label for="dryRun" class="text-sm text-gray-700 font-medium">Dry Run (don't push changes)</label>
+                <input type="checkbox" id="dryRun" checked class="h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700">
+                <label for="dryRun" class="text-sm text-gray-700 dark:text-gray-300 font-medium">Dry Run (don't push changes)</label>
             </div>
 
             <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition duration-200">
@@ -61,8 +80,8 @@
         </form>
 
         <div class="mt-8">
-            <h2 class="text-lg font-semibold mb-2 text-gray-700">Activity Log</h2>
-            <div id="log" class="bg-gray-900 text-green-400 p-4 rounded-lg h-64 overflow-y-auto text-sm">Waiting for input...</div>
+            <h2 class="text-lg font-semibold mb-2 text-gray-700 dark:text-white">Activity Log</h2>
+            <div id="log" class="bg-gray-900 text-green-400 p-4 rounded-lg h-64 overflow-y-auto text-sm border dark:border-gray-700">Waiting for input...</div>
         </div>
     </div>
 
@@ -72,6 +91,14 @@
         const form = document.getElementById('editorForm');
         const logArea = document.getElementById('log');
         const submitBtn = document.getElementById('submitBtn');
+        const fetchReposBtn = document.getElementById('fetchReposBtn');
+        const repoSelection = document.getElementById('repoSelection');
+        const repoList = document.getElementById('repoList');
+        const repoSearch = document.getElementById('repoSearch');
+        const selectAll = document.getElementById('selectAll');
+
+        let allFetchedRepos = [];
+        let selectedRepoIds = new Set();
 
         function log(message, type = 'info') {
             const div = document.createElement('div');
@@ -86,6 +113,97 @@
             logArea.appendChild(div);
             logArea.scrollTop = logArea.scrollHeight;
         }
+
+        fetchReposBtn.addEventListener('click', async () => {
+            const token = document.getElementById('token').value;
+            const org = document.getElementById('org').value;
+
+            if (!token) {
+                log('Error: GitHub token is required to fetch repositories.', 'error');
+                return;
+            }
+
+            fetchReposBtn.disabled = true;
+            fetchReposBtn.textContent = 'Fetching...';
+            const octokit = new Octokit({ auth: token });
+
+            try {
+                log('Fetching repositories...');
+                if (org) {
+                    allFetchedRepos = await octokit.paginate(octokit.rest.repos.listForOrg, {
+                        org: org,
+                        type: "all",
+                    });
+                } else {
+                    allFetchedRepos = await octokit.paginate(octokit.rest.repos.listForAuthenticatedUser, {
+                        visibility: "all",
+                    });
+                }
+                log(`Found ${allFetchedRepos.length} repositories.`, 'success');
+                selectedRepoIds = new Set(allFetchedRepos.map(r => r.id));
+                selectAll.checked = true;
+                renderRepoList();
+                repoSelection.classList.remove('hidden');
+            } catch (error) {
+                log(`Error fetching repositories: ${error.message}`, 'error');
+            } finally {
+                fetchReposBtn.disabled = false;
+                fetchReposBtn.textContent = 'Fetch';
+            }
+        });
+
+        function renderRepoList() {
+            const filter = repoSearch.value.toLowerCase();
+            repoList.innerHTML = '';
+            const filteredRepos = allFetchedRepos.filter(repo => repo.name.toLowerCase().includes(filter));
+
+            filteredRepos.forEach(repo => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center space-x-2';
+                const isChecked = selectedRepoIds.has(repo.id);
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `repo-${repo.id}`;
+                checkbox.value = repo.id;
+                checkbox.className = 'repo-checkbox h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700';
+                checkbox.checked = isChecked;
+
+                const label = document.createElement('label');
+                label.htmlFor = `repo-${repo.id}`;
+                label.className = 'text-sm text-gray-700 dark:text-gray-300 truncate';
+                label.textContent = repo.name;
+
+                checkbox.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        selectedRepoIds.add(repo.id);
+                    } else {
+                        selectedRepoIds.delete(repo.id);
+                        selectAll.checked = false;
+                    }
+                });
+
+                div.appendChild(checkbox);
+                div.appendChild(label);
+                repoList.appendChild(div);
+            });
+        }
+
+        repoSearch.addEventListener('input', renderRepoList);
+
+        selectAll.addEventListener('change', () => {
+            const filter = repoSearch.value.toLowerCase();
+            allFetchedRepos.forEach(repo => {
+                if (repo.name.toLowerCase().includes(filter)) {
+                    if (selectAll.checked) {
+                        selectedRepoIds.add(repo.id);
+                    } else {
+                        selectedRepoIds.delete(repo.id);
+                    }
+                }
+            });
+            renderRepoList();
+        });
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -111,21 +229,31 @@
             const octokit = new Octokit({ auth: token });
 
             try {
-                log('Fetching repositories...');
-                let repos = [];
-                if (org) {
-                    repos = await octokit.paginate(octokit.rest.repos.listForOrg, {
-                        org: org,
-                        type: "all",
-                    });
+                let reposToProcess = [];
+                if (allFetchedRepos.length > 0) {
+                    reposToProcess = allFetchedRepos.filter(repo => selectedRepoIds.has(repo.id));
+                    if (reposToProcess.length === 0) {
+                        log('No repositories selected to process.', 'warning');
+                        submitBtn.disabled = false;
+                        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        return;
+                    }
                 } else {
-                    repos = await octokit.paginate(octokit.rest.repos.listForAuthenticatedUser, {
-                        visibility: "all",
-                    });
+                    log('Fetching repositories...');
+                    if (org) {
+                        reposToProcess = await octokit.paginate(octokit.rest.repos.listForOrg, {
+                            org: org,
+                            type: "all",
+                        });
+                    } else {
+                        reposToProcess = await octokit.paginate(octokit.rest.repos.listForAuthenticatedUser, {
+                            visibility: "all",
+                        });
+                    }
                 }
-                log(`Found ${repos.length} repositories.`, 'success');
+                log(`Processing ${reposToProcess.length} repositories.`, 'info');
 
-                for (const repo of repos) {
+                for (const repo of reposToProcess) {
                     await updateLicense(octokit, repo, { oldYear, newYear, oldName, newName, dryRun });
                 }
 
