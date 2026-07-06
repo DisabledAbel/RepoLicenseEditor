@@ -13,6 +13,7 @@ A versatile tool to bulk edit names and years in license files across all your G
 - **Regex Replacement**: Uses regular expressions for flexible and powerful text replacement.
 - **Change License**: Switch between different license templates (MIT, Apache, etc.) or use a custom template.
 - **License Detection**: Automatically detects existing licenses and warns if they differ from the intended change.
+- **Integrity Check**: Verifies if the existing license text is a standard version of the declared license or if it has been modified.
 - **UTF-8 Support**: Properly handles special characters in license files.
 
 ---
@@ -94,6 +95,7 @@ node index.js --license mit --new-year 2024 --new-name "Jane Smith"
 | `--min-stars` | | Filter repositories with at least this many stars |
 | `--branch` | | Filter repositories by default branch name |
 | `--current-license` | | Filter repositories by their current license spdx_id |
+| `--verify` | | Verify license integrity without making changes |
 | `--repos` | `-r` | Comma-separated list of repository names to process |
 | `--help` | `-h` | Display help for command |
 

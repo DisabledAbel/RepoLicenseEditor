@@ -5,6 +5,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import dotenv from "dotenv";
 import fs from "fs";
+import { replaceLogic, checkLicenseIntegrity } from "./logic.js";
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ program
   .option("--min-stars <number>", "Filter repositories with at least this many stars", parseInt)
   .option("--branch <name>", "Filter repositories by default branch name")
   .option("--current-license <spdx_id>", "Filter repositories by their current license spdx_id")
+  .option("--verify", "Verify license integrity without making changes")
   .parse(process.argv);
 
 const options = program.opts();
@@ -59,7 +61,7 @@ async function getRepositories() {
   return repos;
 }
 
-async function updateLicense(repo) {
+async function updateLicense(repo, licenseTemplateBody = null) {
   const { owner, name: repoName } = repo;
   const possibleLicenseFiles = ["LICENSE", "LICENSE.md", "LICENSE.txt", "license", "license.md", "license.txt"];
 
@@ -88,11 +90,23 @@ async function updateLicense(repo) {
     }
   }
 
-  let newContent = content;
-  let changed = false;
-  let message = "docs: update license year/name";
+  if (options.verify) {
+    if (licenseFile && repo.license && repo.license.key) {
+      try {
+        const templateResp = await octokit.rest.licenses.get({ license: repo.license.key });
+        const status = checkLicenseIntegrity(content, templateResp.data.body);
+        const color = status === 'standard' ? chalk.green : (status === 'modified' ? chalk.red : chalk.yellow);
+        console.log(`${owner.login}/${repoName}: License Integrity Status -> ${color(status.toUpperCase())}`);
+      } catch (e) {
+        console.log(`${owner.login}/${repoName}: Error checking integrity: ${e.message}`);
+      }
+    } else {
+      console.log(`${owner.login}/${repoName}: No license file or license type detected, skipping integrity check.`);
+    }
+    return;
+  }
 
-  if (options.license || options.customLicense) {
+  if (licenseTemplateBody) {
     if (repo.license) {
       if (options.customLicense) {
         console.log(chalk.yellow(`Warning: Repository ${repoName} already has a license (${repo.license.name}). Overwriting with custom template.`));
@@ -100,72 +114,36 @@ async function updateLicense(repo) {
         console.log(chalk.yellow(`Warning: Repository ${repoName} already has a different license (${repo.license.name}).`));
       }
     }
-
-    try {
-      let templateBody = "";
-      let licenseKey = options.license;
-
-      if (options.customLicense) {
-        if (!fs.existsSync(options.customLicense)) {
-          console.error(chalk.red(`Error: Custom license file not found at ${options.customLicense}`));
-          return;
-        }
-        templateBody = fs.readFileSync(options.customLicense, "utf-8");
-        licenseKey = "custom";
-      } else {
-        const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: options.license });
-        templateBody = licenseTemplate.body;
-      }
-
-      newContent = templateBody;
-      if (options.newYear) {
-        newContent = newContent.replace(/\[year\]/g, options.newYear);
-      }
-      if (options.newName) {
-        newContent = newContent.replace(/\[fullname\]/g, options.newName);
-      }
-      changed = true;
-      message = `docs: update license to ${licenseKey}`;
-      if (!licenseFile) {
-        licenseFile = "LICENSE";
-      }
-    } catch (error) {
-      console.error(chalk.red(`Error fetching/reading license template: ${error.message}`));
-      return;
-    }
-  } else {
     if (!licenseFile) {
-      console.log(chalk.yellow(`No license file found in ${owner.login}/${repoName}`));
-      return;
+        licenseFile = "LICENSE";
     }
+  } else if (!licenseFile) {
+    console.log(chalk.yellow(`No license file found in ${owner.login}/${repoName}`));
+    return;
+  }
 
-    if (options.oldYear && options.newYear) {
-      const yearRegex = new RegExp(options.oldYear, 'g');
-      if (yearRegex.test(newContent)) {
-        newContent = newContent.replace(yearRegex, options.newYear);
-        changed = true;
-      }
-    }
+  const { newContent, changed, message, remainingPlaceholders } = replaceLogic(content || "", {
+      ...options,
+      selectedLicense: options.license,
+      licenseTemplateBody
+  });
 
-    if (options.oldName && options.newName) {
-      const nameRegex = new RegExp(options.oldName, 'g');
-      if (nameRegex.test(newContent)) {
-        newContent = newContent.replace(nameRegex, options.newName);
-        changed = true;
-      }
-    }
+  if (remainingPlaceholders && remainingPlaceholders.length > 0) {
+      console.log(chalk.yellow(`Warning: [${owner.login}/${repoName}] Unreplaced placeholders: ${remainingPlaceholders.join(', ')}`));
   }
 
   if (changed) {
     try {
-      await octokit.rest.repos.createOrUpdateFileContents({
+      const payload = {
         owner: owner.login,
         repo: repoName,
         path: licenseFile,
         message: message,
         content: Buffer.from(newContent).toString('base64'),
-        sha: sha,
-      });
+      };
+      if (sha) payload.sha = sha;
+
+      await octokit.rest.repos.createOrUpdateFileContents(payload);
       console.log(chalk.green(`Updated license in ${owner.login}/${repoName}`));
     } catch (error) {
       console.error(chalk.red(`Error updating license in ${owner.login}/${repoName}: ${error.message}`));
@@ -201,8 +179,27 @@ async function main() {
     console.log(chalk.cyan(`Filtered to ${repos.length} repositories with current license ${options.currentLicense}.`));
   }
 
+  let licenseTemplateBody = null;
+  if (options.license || options.customLicense) {
+      try {
+          if (options.customLicense) {
+              if (!fs.existsSync(options.customLicense)) {
+                  console.error(chalk.red(`Error: Custom license file not found at ${options.customLicense}`));
+                  process.exit(1);
+              }
+              licenseTemplateBody = fs.readFileSync(options.customLicense, "utf-8");
+          } else {
+              const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: options.license });
+              licenseTemplateBody = licenseTemplate.body;
+          }
+      } catch (error) {
+          console.error(chalk.red(`Error fetching/reading license template: ${error.message}`));
+          process.exit(1);
+      }
+  }
+
   for (const repo of repos) {
-    await updateLicense(repo);
+    await updateLicense(repo, licenseTemplateBody);
   }
 
   console.log(chalk.bold.green("\nDone!"));
