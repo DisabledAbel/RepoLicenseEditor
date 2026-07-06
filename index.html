@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GitHub License Bulk Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'media'
+        }
+    </script>
     <style>
         #log {
             font-family: monospace;
@@ -99,6 +104,16 @@
 
         let allFetchedRepos = [];
         let selectedRepoIds = new Set();
+
+        function clearRepoState() {
+            allFetchedRepos = [];
+            selectedRepoIds = new Set();
+            repoSelection.classList.add('hidden');
+            repoList.innerHTML = '';
+        }
+
+        document.getElementById('token').addEventListener('input', clearRepoState);
+        document.getElementById('org').addEventListener('input', clearRepoState);
 
         function log(message, type = 'info') {
             const div = document.createElement('div');
