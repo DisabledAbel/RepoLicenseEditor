@@ -49,7 +49,13 @@ Clone the repository and install the dependencies:
 
 ```bash
 git clone https://github.com/DisabledAbel/RepoLicenseEditor.git
+```
+
+```bash
 cd RepoLicenseEditor
+```
+
+```bash
 npm install
 ```
 
