@@ -76,7 +76,9 @@ async function updateLicense(repo) {
         break;
       }
     } catch (error) {
-      // File not found, try next
+      if (error.status !== 404) {
+        throw error;
+      }
     }
   }
 
