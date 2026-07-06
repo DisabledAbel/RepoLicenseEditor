@@ -74,9 +74,12 @@
                 </div>
             </div>
 
-            <div class="flex items-center space-x-2">
-                <input type="checkbox" id="dryRun" checked class="h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700">
-                <label for="dryRun" class="text-sm text-gray-700 dark:text-gray-300 font-medium">Dry Run (don't push changes)</label>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Change License Template (optional)</label>
+                <select id="licenseSelect" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 dark:bg-gray-700 dark:text-white">
+                    <option value="">Keep current license</option>
+                    <!-- Licenses will be injected here -->
+                </select>
             </div>
 
             <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition duration-200">
@@ -101,6 +104,7 @@
         const repoList = document.getElementById('repoList');
         const repoSearch = document.getElementById('repoSearch');
         const selectAll = document.getElementById('selectAll');
+        const licenseSelect = document.getElementById('licenseSelect');
 
         let allFetchedRepos = [];
         let selectedRepoIds = new Set();
@@ -112,7 +116,28 @@
             repoList.innerHTML = '';
         }
 
-        document.getElementById('token').addEventListener('input', clearRepoState);
+        async function fetchLicenses() {
+            const token = document.getElementById('token').value;
+            if (!token) return;
+            const octokit = new Octokit({ auth: token });
+            try {
+                const { data } = await octokit.rest.licenses.getAllCommonlyUsed();
+                licenseSelect.innerHTML = '<option value="">Keep current license</option>';
+                data.forEach(license => {
+                    const option = document.createElement('option');
+                    option.value = license.key;
+                    option.textContent = license.name;
+                    licenseSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error fetching licenses:', error);
+            }
+        }
+
+        document.getElementById('token').addEventListener('input', () => {
+            clearRepoState();
+            fetchLicenses();
+        });
         document.getElementById('org').addEventListener('input', clearRepoState);
 
         function log(message, type = 'info') {
@@ -229,7 +254,7 @@
             const newYear = document.getElementById('newYear').value;
             const oldName = document.getElementById('oldName').value;
             const newName = document.getElementById('newName').value;
-            const dryRun = document.getElementById('dryRun').checked;
+            const selectedLicense = document.getElementById('licenseSelect').value;
 
             if (!token) {
                 log('Error: GitHub token is required.', 'error');
@@ -269,7 +294,7 @@
                 log(`Processing ${reposToProcess.length} repositories.`, 'info');
 
                 for (const repo of reposToProcess) {
-                    await updateLicense(octokit, repo, { oldYear, newYear, oldName, newName, dryRun });
+                    await updateLicense(octokit, repo, { oldYear, newYear, oldName, newName, selectedLicense });
                 }
 
                 log('All done!', 'success');
@@ -310,47 +335,65 @@
                 }
             }
 
-            if (!licenseFile) {
-                log(`Skipping ${owner.login}/${repoName}: No license file found.`, 'warning');
-                return;
-            }
-
             let newContent = content;
             let changed = false;
+            let message = "docs: update license year/name";
 
-            if (options.oldYear && options.newYear) {
-                const yearRegex = new RegExp(options.oldYear, 'g');
-                if (yearRegex.test(newContent)) {
-                    newContent = newContent.replace(yearRegex, options.newYear);
+            if (options.selectedLicense) {
+                try {
+                    const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: options.selectedLicense });
+                    newContent = licenseTemplate.body;
+                    if (options.newYear) {
+                        newContent = newContent.replace(/\[year\]/g, options.newYear);
+                    }
+                    if (options.newName) {
+                        newContent = newContent.replace(/\[fullname\]/g, options.newName);
+                    }
                     changed = true;
+                    message = `docs: update license to ${options.selectedLicense}`;
+                    if (!licenseFile) {
+                        licenseFile = "LICENSE";
+                    }
+                } catch (error) {
+                    log(`Error fetching license template ${options.selectedLicense}: ${error.message}`, 'error');
+                    return;
                 }
-            }
+            } else {
+                if (!licenseFile) {
+                    log(`Skipping ${owner.login}/${repoName}: No license file found.`, 'warning');
+                    return;
+                }
 
-            if (options.oldName && options.newName) {
-                const nameRegex = new RegExp(options.oldName, 'g');
-                if (nameRegex.test(newContent)) {
-                    newContent = newContent.replace(nameRegex, options.newName);
-                    changed = true;
+                if (options.oldYear && options.newYear) {
+                    const yearRegex = new RegExp(options.oldYear, 'g');
+                    if (yearRegex.test(newContent)) {
+                        newContent = newContent.replace(yearRegex, options.newYear);
+                        changed = true;
+                    }
+                }
+
+                if (options.oldName && options.newName) {
+                    const nameRegex = new RegExp(options.oldName, 'g');
+                    if (nameRegex.test(newContent)) {
+                        newContent = newContent.replace(nameRegex, options.newName);
+                        changed = true;
+                    }
                 }
             }
 
             if (changed) {
-                if (options.dryRun) {
-                    log(`[DRY RUN] Would update license in ${owner.login}/${repoName}`, 'info');
-                } else {
-                    try {
-                        await octokit.rest.repos.createOrUpdateFileContents({
-                            owner: owner.login,
-                            repo: repoName,
-                            path: licenseFile,
-                            message: "docs: update license year/name",
-                            content: btoa(unescape(encodeURIComponent(newContent))),
-                            sha: sha,
-                        });
-                        log(`Updated license in ${owner.login}/${repoName}`, 'success');
-                    } catch (error) {
-                        log(`Error updating ${owner.login}/${repoName}: ${error.message}`, 'error');
-                    }
+                try {
+                    await octokit.rest.repos.createOrUpdateFileContents({
+                        owner: owner.login,
+                        repo: repoName,
+                        path: licenseFile,
+                        message: message,
+                        content: btoa(unescape(encodeURIComponent(newContent))),
+                        sha: sha,
+                    });
+                    log(`Updated license in ${owner.login}/${repoName}`, 'success');
+                } catch (error) {
+                    log(`Error updating ${owner.login}/${repoName}: ${error.message}`, 'error');
                 }
             } else {
                 log(`No changes needed for ${owner.login}/${repoName}`);
