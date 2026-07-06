@@ -103,4 +103,4 @@ node index.js --license mit --new-year 2024 --new-name "Jane Smith"
 
 ## 📝 License
 
-This project is licensed under the [ISC License](LICENSE).
+This project is licensed under the GNU General Public License v3.0
