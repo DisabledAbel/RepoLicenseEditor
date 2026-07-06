@@ -4,6 +4,7 @@ import { Octokit } from "@octokit/rest";
 import { Command } from "commander";
 import chalk from "chalk";
 import dotenv from "dotenv";
+import fs from "fs";
 
 dotenv.config();
 
@@ -20,7 +21,11 @@ program
   .option("--old-name <name>", "The name to be replaced")
   .option("--new-name <name>", "The new name")
   .option("-l, --license <key>", "The license template to use (e.g., mit, apache-2.0)")
+  .option("--custom-license <path>", "Path to a custom license template file")
   .option("-r, --repos <repos>", "Comma-separated list of repository names to process")
+  .option("--min-stars <number>", "Filter repositories with at least this many stars", parseInt)
+  .option("--branch <name>", "Filter repositories by default branch name")
+  .option("--current-license <spdx_id>", "Filter repositories by their current license spdx_id")
   .parse(process.argv);
 
 const options = program.opts();
@@ -87,10 +92,32 @@ async function updateLicense(repo) {
   let changed = false;
   let message = "docs: update license year/name";
 
-  if (options.license) {
+  if (options.license || options.customLicense) {
+    if (repo.license) {
+      if (options.customLicense) {
+        console.log(chalk.yellow(`Warning: Repository ${repoName} already has a license (${repo.license.name}). Overwriting with custom template.`));
+      } else if (repo.license.key !== options.license) {
+        console.log(chalk.yellow(`Warning: Repository ${repoName} already has a different license (${repo.license.name}).`));
+      }
+    }
+
     try {
-      const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: options.license });
-      newContent = licenseTemplate.body;
+      let templateBody = "";
+      let licenseKey = options.license;
+
+      if (options.customLicense) {
+        if (!fs.existsSync(options.customLicense)) {
+          console.error(chalk.red(`Error: Custom license file not found at ${options.customLicense}`));
+          return;
+        }
+        templateBody = fs.readFileSync(options.customLicense, "utf-8");
+        licenseKey = "custom";
+      } else {
+        const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: options.license });
+        templateBody = licenseTemplate.body;
+      }
+
+      newContent = templateBody;
       if (options.newYear) {
         newContent = newContent.replace(/\[year\]/g, options.newYear);
       }
@@ -98,12 +125,12 @@ async function updateLicense(repo) {
         newContent = newContent.replace(/\[fullname\]/g, options.newName);
       }
       changed = true;
-      message = `docs: update license to ${options.license}`;
+      message = `docs: update license to ${licenseKey}`;
       if (!licenseFile) {
         licenseFile = "LICENSE";
       }
     } catch (error) {
-      console.error(chalk.red(`Error fetching license template ${options.license}: ${error.message}`));
+      console.error(chalk.red(`Error fetching/reading license template: ${error.message}`));
       return;
     }
   } else {
@@ -157,6 +184,21 @@ async function main() {
     const targetRepos = options.repos.split(",").map(r => r.trim());
     repos = repos.filter(repo => targetRepos.includes(repo.name));
     console.log(chalk.cyan(`Filtered to ${repos.length} repositories based on --repos flag.`));
+  }
+
+  if (options.minStars !== undefined) {
+    repos = repos.filter(repo => repo.stargazers_count >= options.minStars);
+    console.log(chalk.cyan(`Filtered to ${repos.length} repositories with at least ${options.minStars} stars.`));
+  }
+
+  if (options.branch) {
+    repos = repos.filter(repo => repo.default_branch === options.branch);
+    console.log(chalk.cyan(`Filtered to ${repos.length} repositories with default branch ${options.branch}.`));
+  }
+
+  if (options.currentLicense) {
+    repos = repos.filter(repo => repo.license && (repo.license.spdx_id === options.currentLicense || repo.license.key === options.currentLicense));
+    console.log(chalk.cyan(`Filtered to ${repos.length} repositories with current license ${options.currentLicense}.`));
   }
 
   for (const repo of repos) {

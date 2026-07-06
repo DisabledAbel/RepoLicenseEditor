@@ -8,8 +8,11 @@ A versatile tool to bulk edit names and years in license files across all your G
 - **Bulk Processing**: Automatically iterates through all repositories accessible by your GitHub Personal Access Token.
 - **Organization Support**: Optionally target a specific GitHub organization.
 - **Smart Discovery**: Automatically detects common license file names: `LICENSE`, `LICENSE.md`, `LICENSE.txt`, etc.
+- **Advanced Filtering**: Filter repositories by name, stars, license, default branch, or size.
+- **Sorting**: Sort repositories by name, stars, last updated, or size.
 - **Regex Replacement**: Uses regular expressions for flexible and powerful text replacement.
-- **Change License**: Switch between different license templates (MIT, Apache, etc.).
+- **Change License**: Switch between different license templates (MIT, Apache, etc.) or use a custom template.
+- **License Detection**: Automatically detects existing licenses and warns if they differ from the intended change.
 - **UTF-8 Support**: Properly handles special characters in license files.
 
 ---
@@ -87,6 +90,10 @@ node index.js --license mit --new-year 2024 --new-name "Jane Smith"
 | `--old-name` | | The name to be replaced (for text replacement) |
 | `--new-name` | | The new name |
 | `--license` | `-l` | The license template to use (e.g., mit, apache-2.0) |
+| `--custom-license` | | Path to a custom license template file |
+| `--min-stars` | | Filter repositories with at least this many stars |
+| `--branch` | | Filter repositories by default branch name |
+| `--current-license` | | Filter repositories by their current license spdx_id |
 | `--repos` | `-r` | Comma-separated list of repository names to process |
 | `--help` | `-h` | Display help for command |
 

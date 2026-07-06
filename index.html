@@ -36,18 +36,44 @@
                 </div>
             </div>
 
-            <div id="repoSelection" class="hidden space-y-2 border dark:border-gray-700 p-4 rounded-md">
+            <div id="repoSelection" class="hidden space-y-4 border dark:border-gray-700 p-4 rounded-md">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <h3 class="text-md font-semibold text-gray-800 dark:text-white">Select Repositories</h3>
-                    <div class="flex items-center space-x-4">
-                        <input type="text" id="repoSearch" class="border border-gray-300 dark:border-gray-600 rounded-md p-1 text-sm dark:bg-gray-700 dark:text-white" placeholder="Filter repos...">
+                    <div class="flex flex-wrap items-center gap-4">
                         <div class="flex items-center space-x-1">
                             <input type="checkbox" id="selectAll" class="h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700">
                             <label for="selectAll" class="text-sm text-gray-700 dark:text-gray-300">Select All</label>
                         </div>
+                        <input type="text" id="repoSearch" class="border border-gray-300 dark:border-gray-600 rounded-md p-1 text-sm dark:bg-gray-700 dark:text-white" placeholder="Search by name...">
                     </div>
                 </div>
-                <div id="repoList" class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 border dark:border-gray-700 rounded bg-gray-50 dark:bg-gray-900">
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                    <div>
+                        <label class="block text-gray-600 dark:text-gray-400">Sort By</label>
+                        <select id="sortBy" class="w-full border border-gray-300 dark:border-gray-600 rounded p-1 dark:bg-gray-700 dark:text-white">
+                            <option value="name">Name</option>
+                            <option value="pushed_at">Last Updated</option>
+                            <option value="stargazers_count">Stars</option>
+                            <option value="size">Size</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-600 dark:text-gray-400">Filter License</label>
+                        <select id="filterLicense" class="w-full border border-gray-300 dark:border-gray-600 rounded p-1 dark:bg-gray-700 dark:text-white">
+                            <option value="">All</option>
+                            <option value="none">No License</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-600 dark:text-gray-400">Filter Branch</label>
+                        <select id="filterBranch" class="w-full border border-gray-300 dark:border-gray-600 rounded p-1 dark:bg-gray-700 dark:text-white">
+                            <option value="">All</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="repoList" class="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto p-2 border dark:border-gray-700 rounded bg-gray-50 dark:bg-gray-900">
                     <!-- Repositories will be injected here -->
                 </div>
             </div>
@@ -78,8 +104,15 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Change License Template (optional)</label>
                 <select id="licenseSelect" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 dark:bg-gray-700 dark:text-white">
                     <option value="">Keep current license</option>
+                    <option value="custom">Custom Template...</option>
                     <!-- Licenses will be injected here -->
                 </select>
+            </div>
+
+            <div id="customLicenseContainer" class="hidden">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Custom License Template</label>
+                <p class="text-xs text-gray-500 mb-1">Use [year] and [fullname] as placeholders.</p>
+                <textarea id="customLicense" rows="8" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 dark:bg-gray-700 dark:text-white font-mono text-sm" placeholder="MIT License..."></textarea>
             </div>
 
             <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition duration-200">
@@ -105,6 +138,11 @@
         const repoSearch = document.getElementById('repoSearch');
         const selectAll = document.getElementById('selectAll');
         const licenseSelect = document.getElementById('licenseSelect');
+        const customLicenseContainer = document.getElementById('customLicenseContainer');
+        const customLicense = document.getElementById('customLicense');
+        const sortBy = document.getElementById('sortBy');
+        const filterLicense = document.getElementById('filterLicense');
+        const filterBranch = document.getElementById('filterBranch');
 
         let allFetchedRepos = [];
         let selectedRepoIds = new Set();
@@ -122,7 +160,10 @@
             const octokit = new Octokit({ auth: token });
             try {
                 const { data } = await octokit.rest.licenses.getAllCommonlyUsed();
-                licenseSelect.innerHTML = '<option value="">Keep current license</option>';
+                licenseSelect.innerHTML = `
+                    <option value="">Keep current license</option>
+                    <option value="custom">Custom Template...</option>
+                `;
                 data.forEach(license => {
                     const option = document.createElement('option');
                     option.value = license.key;
@@ -182,6 +223,7 @@
                 log(`Found ${allFetchedRepos.length} repositories.`, 'success');
                 selectedRepoIds = new Set(allFetchedRepos.map(r => r.id));
                 selectAll.checked = true;
+                populateFilters();
                 renderRepoList();
                 repoSelection.classList.remove('hidden');
             } catch (error) {
@@ -192,28 +234,76 @@
             }
         });
 
+        function populateFilters() {
+            const licenses = new Set();
+            const branches = new Set();
+            allFetchedRepos.forEach(repo => {
+                if (repo.license) licenses.add(repo.license.name);
+                if (repo.default_branch) branches.add(repo.default_branch);
+            });
+
+            filterLicense.innerHTML = '<option value="">All Licenses</option><option value="none">No License</option>';
+            Array.from(licenses).sort().forEach(l => {
+                const opt = document.createElement('option');
+                opt.value = l;
+                opt.textContent = l;
+                filterLicense.appendChild(opt);
+            });
+
+            filterBranch.innerHTML = '<option value="">All Branches</option>';
+            Array.from(branches).sort().forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b;
+                opt.textContent = b;
+                filterBranch.appendChild(opt);
+            });
+        }
+
         function renderRepoList() {
-            const filter = repoSearch.value.toLowerCase();
+            const searchText = repoSearch.value.toLowerCase();
+            const licenseFilter = filterLicense.value;
+            const branchFilter = filterBranch.value;
+            const sortVal = sortBy.value;
+
+            let filtered = allFetchedRepos.filter(repo => {
+                const matchesSearch = repo.name.toLowerCase().includes(searchText);
+                const matchesLicense = !licenseFilter ||
+                                       (licenseFilter === 'none' ? !repo.license : (repo.license && repo.license.name === licenseFilter));
+                const matchesBranch = !branchFilter || repo.default_branch === branchFilter;
+                return matchesSearch && matchesLicense && matchesBranch;
+            });
+
+            filtered.sort((a, b) => {
+                let valA = a[sortVal];
+                let valB = b[sortVal];
+
+                if (sortVal === 'name') {
+                    return valA.localeCompare(valB);
+                }
+
+                // For pushed_at, stargazers_count, size - descending order usually better for stars/date
+                if (sortVal === 'stargazers_count' || sortVal === 'size' || sortVal === 'pushed_at') {
+                    if (valA < valB) return 1;
+                    if (valA > valB) return -1;
+                    return 0;
+                }
+                return 0;
+            });
+
             repoList.innerHTML = '';
-            const filteredRepos = allFetchedRepos.filter(repo => repo.name.toLowerCase().includes(filter));
-
-            filteredRepos.forEach(repo => {
+            filtered.forEach(repo => {
                 const div = document.createElement('div');
-                div.className = 'flex items-center space-x-2';
-                const isChecked = selectedRepoIds.has(repo.id);
+                div.className = 'flex items-center justify-between p-2 border-b dark:border-gray-700 last:border-0 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-150';
 
+                const leftSide = document.createElement('div');
+                leftSide.className = 'flex items-center space-x-3';
+
+                const isChecked = selectedRepoIds.has(repo.id);
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.id = `repo-${repo.id}`;
-                checkbox.value = repo.id;
-                checkbox.className = 'repo-checkbox h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700';
+                checkbox.className = 'h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700';
                 checkbox.checked = isChecked;
-
-                const label = document.createElement('label');
-                label.htmlFor = `repo-${repo.id}`;
-                label.className = 'text-sm text-gray-700 dark:text-gray-300 truncate';
-                label.textContent = repo.name;
-
                 checkbox.addEventListener('change', (e) => {
                     if (e.target.checked) {
                         selectedRepoIds.add(repo.id);
@@ -223,13 +313,50 @@
                     }
                 });
 
-                div.appendChild(checkbox);
-                div.appendChild(label);
+                const label = document.createElement('label');
+                label.htmlFor = `repo-${repo.id}`;
+                label.className = 'text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer';
+                label.textContent = repo.name;
+
+                leftSide.appendChild(checkbox);
+                leftSide.appendChild(label);
+
+                const rightSide = document.createElement('div');
+                rightSide.className = 'flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400';
+
+                const stars = document.createElement('span');
+                stars.textContent = `⭐ ${repo.stargazers_count}`;
+
+                const license = document.createElement('span');
+                license.className = 'italic';
+                license.textContent = repo.license ? repo.license.spdx_id || repo.license.name : 'No License';
+
+                const branch = document.createElement('span');
+                branch.className = 'bg-gray-200 dark:bg-gray-700 px-1 rounded';
+                branch.textContent = repo.default_branch;
+
+                rightSide.appendChild(stars);
+                rightSide.appendChild(license);
+                rightSide.appendChild(branch);
+
+                div.appendChild(leftSide);
+                div.appendChild(rightSide);
                 repoList.appendChild(div);
             });
         }
 
         repoSearch.addEventListener('input', renderRepoList);
+        sortBy.addEventListener('change', renderRepoList);
+        filterLicense.addEventListener('change', renderRepoList);
+        filterBranch.addEventListener('change', renderRepoList);
+
+        licenseSelect.addEventListener('change', () => {
+            if (licenseSelect.value === 'custom') {
+                customLicenseContainer.classList.remove('hidden');
+            } else {
+                customLicenseContainer.classList.add('hidden');
+            }
+        });
 
         selectAll.addEventListener('change', () => {
             const filter = repoSearch.value.toLowerCase();
@@ -255,6 +382,7 @@
             const oldName = document.getElementById('oldName').value;
             const newName = document.getElementById('newName').value;
             const selectedLicense = document.getElementById('licenseSelect').value;
+            const customTemplate = customLicense.value;
 
             if (!token) {
                 log('Error: GitHub token is required.', 'error');
@@ -294,7 +422,7 @@
                 log(`Processing ${reposToProcess.length} repositories.`, 'info');
 
                 for (const repo of reposToProcess) {
-                    await updateLicense(octokit, repo, { oldYear, newYear, oldName, newName, selectedLicense });
+                    await updateLicense(octokit, repo, { oldYear, newYear, oldName, newName, selectedLicense, customTemplate });
                 }
 
                 log('All done!', 'success');
@@ -340,9 +468,26 @@
             let message = "docs: update license year/name";
 
             if (options.selectedLicense) {
+                if (repo.license && options.selectedLicense !== 'custom' && repo.license.key !== options.selectedLicense) {
+                    log(`Warning: Repository ${repoName} already has a different license (${repo.license.name}).`, 'warning');
+                } else if (repo.license && options.selectedLicense === 'custom') {
+                    log(`Warning: Repository ${repoName} already has a license (${repo.license.name}). Overwriting with custom template.`, 'warning');
+                }
+
                 try {
-                    const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: options.selectedLicense });
-                    newContent = licenseTemplate.body;
+                    let templateBody = "";
+                    if (options.selectedLicense === 'custom') {
+                        templateBody = options.customTemplate;
+                        if (!templateBody) {
+                            log('Error: Custom template is empty.', 'error');
+                            return;
+                        }
+                    } else {
+                        const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: options.selectedLicense });
+                        templateBody = licenseTemplate.body;
+                    }
+
+                    newContent = templateBody;
                     if (options.newYear) {
                         newContent = newContent.replace(/\[year\]/g, options.newYear);
                     }
