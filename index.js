@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import * as jsdiff from "diff";
 import { replaceLogic, checkLicenseIntegrity } from "./logic.js";
+import { TEMPLATES } from "./templates.js";
 
 dotenv.config();
 
@@ -212,6 +213,8 @@ async function main() {
                   process.exit(1);
               }
               licenseTemplateBody = fs.readFileSync(options.customLicense, "utf-8");
+          } else if (TEMPLATES[compareLicense]) {
+              licenseTemplateBody = TEMPLATES[compareLicense].body;
           } else {
               const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: compareLicense });
               licenseTemplateBody = licenseTemplate.body;

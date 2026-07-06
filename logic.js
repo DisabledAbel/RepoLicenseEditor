@@ -1,15 +1,21 @@
 /**
  * Standard placeholders used in license templates.
  */
-export const PLACEHOLDERS = [
+export const YEAR_PLACEHOLDERS = [
   '[year]',
-  '[fullname]',
   '<year>',
+  '[yyyy]'
+];
+
+export const NAME_PLACEHOLDERS = [
+  '[fullname]',
   '<copyright holders>',
   '<owner>',
-  '[yyyy]',
-  '[name of copyright owner]'
+  '[name of copyright owner]',
+  '<name of author>'
 ];
+
+export const PLACEHOLDERS = [...YEAR_PLACEHOLDERS, ...NAME_PLACEHOLDERS];
 
 /**
  * Normalizes text for comparison by collapsing whitespace and converting to lowercase.
@@ -36,17 +42,21 @@ export function replaceLogic(content, options) {
     let nameReplaced = false;
 
     if (options.newYear) {
-      if (newContent.includes('[year]')) {
-          newContent = newContent.replace(/\[year\]/g, options.newYear);
+      YEAR_PLACEHOLDERS.forEach(p => {
+        if (newContent.includes(p)) {
+          newContent = newContent.split(p).join(options.newYear);
           yearReplaced = true;
-      }
+        }
+      });
     }
 
     if (options.newName) {
-      if (newContent.includes('[fullname]')) {
-          newContent = newContent.replace(/\[fullname\]/g, options.newName);
+      NAME_PLACEHOLDERS.forEach(p => {
+        if (newContent.includes(p)) {
+          newContent = newContent.split(p).join(options.newName);
           nameReplaced = true;
-      }
+        }
+      });
     }
 
     const remaining = PLACEHOLDERS.filter(p => newContent.includes(p));

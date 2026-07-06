@@ -34,3 +34,15 @@ const mitTemplate = "MIT License\n\nCopyright (c) [year] [fullname]\n\nPermissio
 const res5 = replaceLogic(testContent, { newYear: "2025", newName: "New Author", selectedLicense: "mit", licenseTemplateBody: mitTemplate });
 console.log(res5);
 if (res5.newContent.includes("2025") && res5.newContent.includes("New Author") && !res5.newContent.includes("[year]") && res5.changed && res5.message.includes("mit")) console.log("PASS"); else console.log("FAIL");
+
+console.log("\nTest 6: Apache-style Placeholders");
+const apacheTemplate = "Apache License 2.0\n\nCopyright <year> <copyright holders>\n\n...";
+const res6 = replaceLogic(testContent, { newYear: "2026", newName: "Apache Author", selectedLicense: "apache-2.0", licenseTemplateBody: apacheTemplate });
+console.log(res6);
+if (res6.newContent.includes("2026") && res6.newContent.includes("Apache Author") && !res6.newContent.includes("<year>") && res6.changed) console.log("PASS"); else console.log("FAIL");
+
+console.log("\nTest 7: Other Placeholder Variations");
+const otherTemplate = "License\n\nCopyright [yyyy] [name of copyright owner]\n\n...";
+const res7 = replaceLogic(testContent, { newYear: "2027", newName: "Owner Name", selectedLicense: "custom", licenseTemplateBody: otherTemplate });
+console.log(res7);
+if (res7.newContent.includes("2027") && res7.newContent.includes("Owner Name") && !res7.newContent.includes("[yyyy]") && res7.changed) console.log("PASS"); else console.log("FAIL");

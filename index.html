@@ -169,6 +169,7 @@
         import { Octokit } from "https://esm.sh/@octokit/rest";
         import * as jsdiff from "https://esm.sh/diff";
         import { replaceLogic, checkLicenseIntegrity } from "./logic.js";
+        import { TEMPLATES } from "./templates.js";
 
         const form = document.getElementById('editorForm');
         const logArea = document.getElementById('log');
@@ -196,7 +197,7 @@
 
         let allFetchedRepos = [];
         let selectedRepoIds = new Set();
-        let cachedTemplates = {};
+        let cachedTemplates = { ...Object.fromEntries(Object.entries(TEMPLATES).map(([k, v]) => [k, v.body])) };
 
         function clearRepoState() {
             allFetchedRepos = [];
@@ -205,6 +206,22 @@
             repoList.innerHTML = '';
         }
 
+        function populateLicenseSelect() {
+            licenseSelect.innerHTML = `
+                <option value="">Keep current license</option>
+                <option value="custom">Custom Template...</option>
+            `;
+            Object.keys(TEMPLATES).forEach(key => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = TEMPLATES[key].name;
+                licenseSelect.appendChild(option);
+            });
+            populateCompareSelects();
+        }
+
+        populateLicenseSelect();
+
         let fetchTimeout;
         async function fetchLicenses() {
             const token = document.getElementById('token').value;
@@ -212,15 +229,15 @@
             const octokit = new Octokit({ auth: token });
             try {
                 const { data } = await octokit.rest.licenses.getAllCommonlyUsed();
-                licenseSelect.innerHTML = `
-                    <option value="">Keep current license</option>
-                    <option value="custom">Custom Template...</option>
-                `;
+
+                // Merge with bundled if any new ones found
                 data.forEach(license => {
-                    const option = document.createElement('option');
-                    option.value = license.key;
-                    option.textContent = license.name;
-                    licenseSelect.appendChild(option);
+                    if (!TEMPLATES[license.key]) {
+                        const option = document.createElement('option');
+                        option.value = license.key;
+                        option.textContent = license.name;
+                        licenseSelect.appendChild(option);
+                    }
                 });
                 populateCompareSelects(data);
             } catch (error) {
@@ -292,7 +309,7 @@
             }
         });
 
-        function populateCompareSelects(licenses) {
+        function populateCompareSelects(extraLicenses = []) {
             const selects = [compareLeftSelect, compareRightSelect];
             selects.forEach(select => {
                 select.innerHTML = '<option value="">Select License...</option>';
@@ -301,11 +318,20 @@
                 customOpt.textContent = 'Custom Template';
                 select.appendChild(customOpt);
 
-                licenses.forEach(l => {
+                Object.keys(TEMPLATES).forEach(key => {
                     const opt = document.createElement('option');
-                    opt.value = `template:${l.key}`;
-                    opt.textContent = `Template: ${l.name}`;
+                    opt.value = `template:${key}`;
+                    opt.textContent = `Template: ${TEMPLATES[key].name}`;
                     select.appendChild(opt);
+                });
+
+                extraLicenses.forEach(l => {
+                    if (!TEMPLATES[l.key]) {
+                        const opt = document.createElement('option');
+                        opt.value = `template:${l.key}`;
+                        opt.textContent = `Template: ${l.name}`;
+                        select.appendChild(opt);
+                    }
                 });
 
                 allFetchedRepos.forEach(r => {
