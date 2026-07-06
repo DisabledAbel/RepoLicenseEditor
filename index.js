@@ -19,8 +19,8 @@ program
   .option("--new-year <year>", "The new year")
   .option("--old-name <name>", "The name to be replaced")
   .option("--new-name <name>", "The new name")
+  .option("-l, --license <key>", "The license template to use (e.g., mit, apache-2.0)")
   .option("-r, --repos <repos>", "Comma-separated list of repository names to process")
-  .option("--dry-run", "Show what would be changed without making actual changes")
   .parse(process.argv);
 
 const options = program.opts();
@@ -83,47 +83,65 @@ async function updateLicense(repo) {
     }
   }
 
-  if (!licenseFile) {
-    console.log(chalk.yellow(`No license file found in ${owner.login}/${repoName}`));
-    return;
-  }
-
   let newContent = content;
   let changed = false;
+  let message = "docs: update license year/name";
 
-  if (options.oldYear && options.newYear) {
-    const yearRegex = new RegExp(options.oldYear, 'g');
-    if (yearRegex.test(newContent)) {
-      newContent = newContent.replace(yearRegex, options.newYear);
+  if (options.license) {
+    try {
+      const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: options.license });
+      newContent = licenseTemplate.body;
+      if (options.newYear) {
+        newContent = newContent.replace(/\[year\]/g, options.newYear);
+      }
+      if (options.newName) {
+        newContent = newContent.replace(/\[fullname\]/g, options.newName);
+      }
       changed = true;
+      message = `docs: update license to ${options.license}`;
+      if (!licenseFile) {
+        licenseFile = "LICENSE";
+      }
+    } catch (error) {
+      console.error(chalk.red(`Error fetching license template ${options.license}: ${error.message}`));
+      return;
     }
-  }
+  } else {
+    if (!licenseFile) {
+      console.log(chalk.yellow(`No license file found in ${owner.login}/${repoName}`));
+      return;
+    }
 
-  if (options.oldName && options.newName) {
-    const nameRegex = new RegExp(options.oldName, 'g');
-    if (nameRegex.test(newContent)) {
-      newContent = newContent.replace(nameRegex, options.newName);
-      changed = true;
+    if (options.oldYear && options.newYear) {
+      const yearRegex = new RegExp(options.oldYear, 'g');
+      if (yearRegex.test(newContent)) {
+        newContent = newContent.replace(yearRegex, options.newYear);
+        changed = true;
+      }
+    }
+
+    if (options.oldName && options.newName) {
+      const nameRegex = new RegExp(options.oldName, 'g');
+      if (nameRegex.test(newContent)) {
+        newContent = newContent.replace(nameRegex, options.newName);
+        changed = true;
+      }
     }
   }
 
   if (changed) {
-    if (options.dryRun) {
-      console.log(chalk.blue(`[DRY RUN] Would update license in ${owner.login}/${repoName}`));
-    } else {
-      try {
-        await octokit.rest.repos.createOrUpdateFileContents({
-          owner: owner.login,
-          repo: repoName,
-          path: licenseFile,
-          message: "docs: update license year/name",
-          content: Buffer.from(newContent).toString('base64'),
-          sha: sha,
-        });
-        console.log(chalk.green(`Updated license in ${owner.login}/${repoName}`));
-      } catch (error) {
-        console.error(chalk.red(`Error updating license in ${owner.login}/${repoName}: ${error.message}`));
-      }
+    try {
+      await octokit.rest.repos.createOrUpdateFileContents({
+        owner: owner.login,
+        repo: repoName,
+        path: licenseFile,
+        message: message,
+        content: Buffer.from(newContent).toString('base64'),
+        sha: sha,
+      });
+      console.log(chalk.green(`Updated license in ${owner.login}/${repoName}`));
+    } catch (error) {
+      console.error(chalk.red(`Error updating license in ${owner.login}/${repoName}: ${error.message}`));
     }
   } else {
     console.log(chalk.gray(`No changes needed for ${owner.login}/${repoName}`));

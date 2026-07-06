@@ -9,7 +9,7 @@ A versatile tool to bulk edit names and years in license files across all your G
 - **Organization Support**: Optionally target a specific GitHub organization.
 - **Smart Discovery**: Automatically detects common license file names: `LICENSE`, `LICENSE.md`, `LICENSE.txt`, etc.
 - **Regex Replacement**: Uses regular expressions for flexible and powerful text replacement.
-- **Dry Run**: Safely preview changes before committing them to GitHub.
+- **Change License**: Switch between different license templates (MIT, Apache, etc.).
 - **UTF-8 Support**: Properly handles special characters in license files.
 
 ---
@@ -32,9 +32,8 @@ The browser-based version requires no installation and runs directly in your web
 1. Open `index.html` in any modern web browser (Chrome, Firefox, Safari, Edge).
 2. Enter your **GitHub PAT**.
 3. (Optional) Specify an **Organization** name.
-4. Enter the **Old Year/Name** and the **New Year/Name**.
-5. Keep **Dry Run** checked to preview changes in the Activity Log.
-6. Uncheck **Dry Run** and click **Start Bulk Edit** to apply changes.
+4. Enter the **Old Year/Name** and the **New Year/Name**, or select a **License Template**.
+5. Click **Start Bulk Edit** to apply changes.
 
 ---
 
@@ -72,9 +71,9 @@ node index.js --old-year 2023 --new-year 2024
 node index.js --org my-org --old-year 2023 --new-year 2024 --old-name "Original Author" --new-name "New Author"
 ```
 
-**Dry Run (Preview changes):**
+**Change the license to MIT and set the year/name:**
 ```bash
-node index.js --old-year 2023 --new-year 2024 --dry-run
+node index.js --license mit --new-year 2024 --new-name "Jane Smith"
 ```
 
 ### All CLI Options
@@ -83,11 +82,12 @@ node index.js --old-year 2023 --new-year 2024 --dry-run
 |--------|-----------|-------------|
 | `--token` | `-t` | GitHub Personal Access Token |
 | `--org` | `-o` | GitHub organization name |
-| `--old-year` | | The year to be replaced |
+| `--old-year` | | The year to be replaced (for text replacement) |
 | `--new-year` | | The new year |
-| `--old-name` | | The name to be replaced |
+| `--old-name` | | The name to be replaced (for text replacement) |
 | `--new-name` | | The new name |
-| `--dry-run` | | Preview changes without committing |
+| `--license` | `-l` | The license template to use (e.g., mit, apache-2.0) |
+| `--repos` | `-r` | Comma-separated list of repository names to process |
 | `--help` | `-h` | Display help for command |
 
 ---
