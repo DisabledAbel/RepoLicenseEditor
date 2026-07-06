@@ -115,9 +115,14 @@
                 <textarea id="customLicense" rows="8" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2 dark:bg-gray-700 dark:text-white font-mono text-sm" placeholder="MIT License..."></textarea>
             </div>
 
-            <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition duration-200">
-                Start Bulk Edit
-            </button>
+            <div class="grid grid-cols-2 gap-4">
+                <button type="button" id="verifyBtn" class="bg-gray-600 text-white font-bold py-2 px-4 rounded hover:bg-gray-700 transition duration-200">
+                    Verify All Integrity
+                </button>
+                <button type="submit" id="submitBtn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition duration-200">
+                    Start Bulk Edit
+                </button>
+            </div>
         </form>
 
         <div class="mt-8">
@@ -128,6 +133,7 @@
 
     <script type="module">
         import { Octokit } from "https://esm.sh/@octokit/rest";
+        import { replaceLogic, checkLicenseIntegrity } from "./logic.js";
 
         const form = document.getElementById('editorForm');
         const logArea = document.getElementById('log');
@@ -140,6 +146,7 @@
         const licenseSelect = document.getElementById('licenseSelect');
         const customLicenseContainer = document.getElementById('customLicenseContainer');
         const customLicense = document.getElementById('customLicense');
+        const verifyBtn = document.getElementById('verifyBtn');
         const sortBy = document.getElementById('sortBy');
         const filterLicense = document.getElementById('filterLicense');
         const filterBranch = document.getElementById('filterBranch');
@@ -154,6 +161,7 @@
             repoList.innerHTML = '';
         }
 
+        let fetchTimeout;
         async function fetchLicenses() {
             const token = document.getElementById('token').value;
             if (!token) return;
@@ -177,7 +185,8 @@
 
         document.getElementById('token').addEventListener('input', () => {
             clearRepoState();
-            fetchLicenses();
+            clearTimeout(fetchTimeout);
+            fetchTimeout = setTimeout(fetchLicenses, 500);
         });
         document.getElementById('org').addEventListener('input', clearRepoState);
 
@@ -328,8 +337,23 @@
                 stars.textContent = `⭐ ${repo.stargazers_count}`;
 
                 const license = document.createElement('span');
-                license.className = 'italic';
+                license.className = 'italic flex items-center space-x-1';
                 license.textContent = repo.license ? repo.license.spdx_id || repo.license.name : 'No License';
+
+                if (repo.license && repo.license.key) {
+                    const integrityBadge = document.createElement('span');
+                    integrityBadge.className = 'ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase';
+                    integrityBadge.id = `integrity-${repo.id}`;
+                    integrityBadge.textContent = repo.integrity || '...';
+                    if (repo.integrity === 'standard') {
+                        integrityBadge.classList.add('bg-green-200', 'text-green-700');
+                    } else if (repo.integrity === 'modified') {
+                        integrityBadge.classList.add('bg-red-200', 'text-red-700');
+                    } else {
+                        integrityBadge.classList.add('bg-gray-200', 'text-gray-600');
+                    }
+                    license.appendChild(integrityBadge);
+                }
 
                 const branch = document.createElement('span');
                 branch.className = 'bg-gray-200 dark:bg-gray-700 px-1 rounded';
@@ -349,6 +373,65 @@
         sortBy.addEventListener('change', renderRepoList);
         filterLicense.addEventListener('change', renderRepoList);
         filterBranch.addEventListener('change', renderRepoList);
+
+        async function fetchIntegrity(repo) {
+            const token = document.getElementById('token').value;
+            const badge = document.getElementById(`integrity-${repo.id}`);
+            if (!token || !badge || repo.integrity) return;
+
+            const octokit = new Octokit({ auth: token });
+            try {
+                const possibleFiles = ["LICENSE", "LICENSE.md", "LICENSE.txt", "license", "license.md", "license.txt"];
+                let content = "";
+                for (const file of possibleFiles) {
+                    try {
+                        const resp = await octokit.rest.repos.getContent({
+                            owner: repo.owner.login,
+                            repo: repo.name,
+                            path: file
+                        });
+                        if (resp.data && !Array.isArray(resp.data)) {
+                            content = decodeURIComponent(escape(atob(resp.data.content.replace(/\s/g, ''))));
+                            break;
+                        }
+                    } catch (e) {}
+                }
+
+                if (!content) {
+                    badge.textContent = 'NO FILE';
+                    return;
+                }
+
+                const templateResp = await octokit.rest.licenses.get({ license: repo.license.key });
+                const status = checkLicenseIntegrity(content, templateResp.data.body);
+
+                repo.integrity = status;
+                badge.textContent = status;
+                if (status === 'standard') {
+                    badge.classList.replace('bg-gray-200', 'bg-green-200');
+                    badge.classList.replace('text-gray-600', 'text-green-700');
+                } else if (status === 'modified') {
+                    badge.classList.replace('bg-gray-200', 'bg-red-200');
+                    badge.classList.replace('text-gray-600', 'text-red-700');
+                }
+            } catch (e) {
+                badge.textContent = 'ERR';
+            }
+        }
+
+        verifyBtn.addEventListener('click', async () => {
+            log('Starting integrity verification for all fetched repositories...');
+            verifyBtn.disabled = true;
+            verifyBtn.textContent = 'Verifying...';
+            for (const repo of allFetchedRepos) {
+                if (repo.license && repo.license.key) {
+                    await fetchIntegrity(repo);
+                }
+            }
+            log('Integrity verification complete.', 'success');
+            verifyBtn.disabled = false;
+            verifyBtn.textContent = 'Verify All Integrity';
+        });
 
         licenseSelect.addEventListener('change', () => {
             if (licenseSelect.value === 'custom') {
@@ -381,7 +464,7 @@
             const newYear = document.getElementById('newYear').value;
             const oldName = document.getElementById('oldName').value;
             const newName = document.getElementById('newName').value;
-            const selectedLicense = document.getElementById('licenseSelect').value;
+            const selectedLicense = licenseSelect.value;
             const customTemplate = customLicense.value;
 
             if (!token) {
@@ -419,10 +502,27 @@
                         });
                     }
                 }
+
+                let licenseTemplateBody = null;
+                if (selectedLicense) {
+                    if (selectedLicense === 'custom') {
+                        licenseTemplateBody = customTemplate;
+                        if (!licenseTemplateBody) {
+                             log('Error: Custom template is empty.', 'error');
+                             submitBtn.disabled = false;
+                             submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                             return;
+                        }
+                    } else {
+                        const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: selectedLicense });
+                        licenseTemplateBody = licenseTemplate.body;
+                    }
+                }
+
                 log(`Processing ${reposToProcess.length} repositories.`, 'info');
 
                 for (const repo of reposToProcess) {
-                    await updateLicense(octokit, repo, { oldYear, newYear, oldName, newName, selectedLicense, customTemplate });
+                    await updateLicense(octokit, repo, { oldYear, newYear, oldName, newName, selectedLicense, licenseTemplateBody });
                 }
 
                 log('All done!', 'success');
@@ -463,79 +563,40 @@
                 }
             }
 
-            let newContent = content;
-            let changed = false;
-            let message = "docs: update license year/name";
-
-            if (options.selectedLicense) {
-                if (repo.license && options.selectedLicense !== 'custom' && repo.license.key !== options.selectedLicense) {
-                    log(`Warning: Repository ${repoName} already has a different license (${repo.license.name}).`, 'warning');
-                } else if (repo.license && options.selectedLicense === 'custom') {
-                    log(`Warning: Repository ${repoName} already has a license (${repo.license.name}). Overwriting with custom template.`, 'warning');
-                }
-
-                try {
-                    let templateBody = "";
+            if (options.licenseTemplateBody) {
+                if (repo.license) {
                     if (options.selectedLicense === 'custom') {
-                        templateBody = options.customTemplate;
-                        if (!templateBody) {
-                            log('Error: Custom template is empty.', 'error');
-                            return;
-                        }
-                    } else {
-                        const { data: licenseTemplate } = await octokit.rest.licenses.get({ license: options.selectedLicense });
-                        templateBody = licenseTemplate.body;
+                        log(`Warning: Repository ${repoName} already has a license (${repo.license.name}). Overwriting with custom template.`, 'warning');
+                    } else if (repo.license.key !== options.selectedLicense) {
+                        log(`Warning: Repository ${repoName} already has a different license (${repo.license.name}).`, 'warning');
                     }
-
-                    newContent = templateBody;
-                    if (options.newYear) {
-                        newContent = newContent.replace(/\[year\]/g, options.newYear);
-                    }
-                    if (options.newName) {
-                        newContent = newContent.replace(/\[fullname\]/g, options.newName);
-                    }
-                    changed = true;
-                    message = `docs: update license to ${options.selectedLicense}`;
-                    if (!licenseFile) {
-                        licenseFile = "LICENSE";
-                    }
-                } catch (error) {
-                    log(`Error fetching license template ${options.selectedLicense}: ${error.message}`, 'error');
-                    return;
                 }
-            } else {
                 if (!licenseFile) {
-                    log(`Skipping ${owner.login}/${repoName}: No license file found.`, 'warning');
-                    return;
+                    licenseFile = "LICENSE";
                 }
+            } else if (!licenseFile) {
+                log(`Skipping ${owner.login}/${repoName}: No license file found.`, 'warning');
+                return;
+            }
 
-                if (options.oldYear && options.newYear) {
-                    const yearRegex = new RegExp(options.oldYear, 'g');
-                    if (yearRegex.test(newContent)) {
-                        newContent = newContent.replace(yearRegex, options.newYear);
-                        changed = true;
-                    }
-                }
+            const { newContent, changed, message, remainingPlaceholders } = replaceLogic(content || "", options);
 
-                if (options.oldName && options.newName) {
-                    const nameRegex = new RegExp(options.oldName, 'g');
-                    if (nameRegex.test(newContent)) {
-                        newContent = newContent.replace(nameRegex, options.newName);
-                        changed = true;
-                    }
-                }
+            if (remainingPlaceholders && remainingPlaceholders.length > 0) {
+                log(`Warning: [${owner.login}/${repoName}] Unreplaced placeholders: ${remainingPlaceholders.join(', ')}`, 'warning');
             }
 
             if (changed) {
                 try {
-                    await octokit.rest.repos.createOrUpdateFileContents({
+                    const payload = {
                         owner: owner.login,
                         repo: repoName,
                         path: licenseFile,
                         message: message,
                         content: btoa(unescape(encodeURIComponent(newContent))),
-                        sha: sha,
-                    });
+                    };
+                    if (sha) payload.sha = sha;
+
+                    await octokit.rest.repos.createOrUpdateFileContents(payload);
                     log(`Updated license in ${owner.login}/${repoName}`, 'success');
                 } catch (error) {
                     log(`Error updating ${owner.login}/${repoName}: ${error.message}`, 'error');
