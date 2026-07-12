@@ -29,18 +29,6 @@ To use this tool, you need a **GitHub Personal Access Token (PAT)**:
 
 ---
 
-## 🌐 Browser Usage
-
-The browser-based version requires no installation and runs directly in your web browser.
-
-1. Open `index.html` in any modern web browser (Chrome, Firefox, Safari, Edge).
-2. Enter your **GitHub PAT**.
-3. (Optional) Specify an **Organization** name.
-4. Enter the **Old Year/Name** and the **New Year/Name**, or select a **License Template**.
-5. Click **Start Bulk Edit** to apply changes.
-
----
-
 ## 💻 CLI Usage
 
 ### Installation
